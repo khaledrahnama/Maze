@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 import sys
 from mazegen import MazeGenerator
+from display import MazeDisplay
 
 
 class ConfigError(ValueError):
@@ -65,32 +66,33 @@ def load(path: str) -> Settings:
                     values["PERFECT"].lower() == "true", seed)
 
 
+
 def main() -> None:
-    """Report configuration problems without tracebacks."""
+    """Load the configuration and launch the maze interface."""
     try:
         if len(sys.argv) != 2:
-            raise ConfigError("usage: python3 a_maze_ing.py config.txt")
+            raise ConfigError(
+                "usage: python3 a_maze_ing.py config.txt"
+            )
+
         settings = load(sys.argv[1])
-        maze = MazeGenerator(settings.width, settings.height, settings.entry,
-                             settings.exit, settings.perfect, settings.seed)
+        maze = MazeGenerator(
+            settings.width,
+            settings.height,
+            settings.entry,
+            settings.exit,
+            settings.perfect,
+            settings.seed,
+        )
+
         maze.generate()
         maze.write(settings.output_file)
-        show_path, color = False, ""
-        while True:
-            print(maze.motif_message)
-            print(maze.render(show_path, color))
-            choice = input("1 regenerate | 2 path | 3 color | 4 quit: ")
-            if choice == "1":
-                maze.generate()
-                maze.write(settings.output_file)
-            elif choice == "2":
-                show_path = not show_path
-            elif choice == "3":
-                color = "" if color else "\033[36m"
-            elif choice == "4":
-                break
+
+        display = MazeDisplay(maze, settings.output_file)
+        display.run()
+
     except (EOFError, KeyboardInterrupt):
-        print("Goodbye.")
+        print("\nGoodbye.")
     except (ValueError, OSError) as error:
         print(f"Error: {error}")
 
