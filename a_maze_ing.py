@@ -1,24 +1,20 @@
 """Command-line program of the A-Maze-ing project.
 
 Reads a KEY=VALUE configuration file, asks :mod:`mazegen` for a maze, writes
-the output file and shows the maze in the terminal with a small menu. All
-foreseeable problems end as one "Error: ..." line and the exit code 1.
+the output file and hands it to :mod:`display` for the interactive terminal
+view. All foreseeable problems end as one "Error: ..." line and exit code 1.
 
 Usage:
     python3 a_maze_ing.py config.txt
 """
 from dataclasses import dataclass
 import sys
+from display import MazeDisplay
 from mazegen import MazeGenerator
 
 
 class ConfigError(ValueError):
     """Configuration cannot describe a valid maze."""
-
-
-# ANSI colours offered by the menu: no colour, then four wall colours.
-WALL_COLORS = ("", "\033[36m", "\033[32m", "\033[35m", "\033[33m")
-MOTIF_COLOR = "\033[31m"
 
 
 @dataclass
@@ -114,38 +110,6 @@ def load(path: str) -> Settings:
                     values["PERFECT"].lower() == "true", seed)
 
 
-def menu(maze: MazeGenerator, settings: Settings) -> None:
-    """Show the maze and handle the user interactions.
-
-    Options: regenerate a new maze (and rewrite the output file), show or
-    hide the shortest path, change the wall colours, colour the "42", quit.
-
-    Args:
-        maze: The generator holding the maze to display.
-        settings: The settings, used to rewrite the output file.
-
-    Raises:
-        OSError: If the output file cannot be rewritten.
-    """
-    show_path, color_index, motif_color = False, 0, ""
-    while True:
-        print(maze.motif_message)
-        print(maze.render(show_path, WALL_COLORS[color_index], motif_color))
-        choice = input("1 regenerate | 2 path | 3 colour | 4 motif colour"
-                       " | 5 quit: ").strip()
-        if choice == "1":
-            maze.generate()
-            maze.write(settings.output_file)
-        elif choice == "2":
-            show_path = not show_path
-        elif choice == "3":
-            color_index = (color_index + 1) % len(WALL_COLORS)
-        elif choice == "4":
-            motif_color = "" if motif_color else MOTIF_COLOR
-        elif choice == "5":
-            return
-
-
 def main() -> None:
     """Run the program and report every problem without a traceback.
 
@@ -160,7 +124,7 @@ def main() -> None:
                              settings.exit, settings.perfect, settings.seed)
         maze.generate()
         maze.write(settings.output_file)
-        menu(maze, settings)
+        MazeDisplay(maze, settings.output_file).run()
     except (EOFError, KeyboardInterrupt):
         print("\nGoodbye.")
     except (ValueError, OSError) as error:

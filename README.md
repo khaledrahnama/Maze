@@ -15,9 +15,11 @@ maze contains a "42" drawn by fully closed cells, the outer border is closed,
 neighbouring cells always agree about the wall between them, and no 3x3 area
 is completely open.
 
-The generation logic lives in a single reusable module, `mazegen.py`, so a
-later project can install it with pip and build mazes without this
-command-line program.
+The project is split in three files: `a_maze_ing.py` reads the configuration
+and runs the program, `display.py` draws the maze in the terminal with
+box-drawing characters and handles the controls, and `mazegen.py` holds all
+the generation logic. Only `mazegen.py` is packaged, so a later project can
+install it with pip and build mazes without the interface.
 
 ## Instructions
 
@@ -34,10 +36,22 @@ make clean               # remove caches and generated mazes
 make build               # build mazegen-1.0.0-py3-none-any.whl and .tar.gz
 ```
 
-While the program runs it displays the maze and offers: `1` regenerate a new
-maze (the output file is rewritten), `2` show or hide the shortest path, `3`
-change the wall colours, `4` colour the "42", `5` quit. Ending the input
-(Ctrl+D) or interrupting (Ctrl+C) also quits cleanly.
+While the program runs it shows a header with the mode, the entry and exit,
+the current colours and whether the "42" was drawn, then the maze, then the
+controls:
+
+| Key | Action |
+| --- | --- |
+| `R` | Regenerate a new maze and rewrite the output file |
+| `P` | Show or hide the shortest path |
+| `C` | Change the wall colour (six choices) |
+| `M` | Change the colour of the "42" |
+| `Q` | Quit |
+
+The maze is drawn with box-drawing characters: `S` is the entry, `E` the
+exit, solid blocks are the "42" and a continuous line is the solution.
+Ending the input (Ctrl+D) or interrupting (Ctrl+C) also quits cleanly, and
+an unknown key just asks again.
 
 Every error prints one `Error: ...` line and exits with the status 1: missing
 or unreadable configuration file, a line that is not `KEY=VALUE`, a repeated
@@ -100,11 +114,12 @@ with every extra opening. Every candidate wall is rejected if opening it
 would create a fully open 3x3 area.
 
 The "42" is placed before carving: its cells are marked as visited, so the
-carver never enters them and their four walls stay closed. The program tries
-each possible position and keeps the first one that avoids the entry, the
-exit, the corners and the centre, and still leaves every other cell
-reachable. If the maze is too small, the motif is skipped and the program
-says so.
+carver never enters them and their four walls stay closed. The program starts
+at the centre of the grid and tries positions in rings around it, keeping the
+first one that avoids the entry, the exit, the corners and the centre, and
+still leaves every other cell reachable. If the maze is too small, or no
+position keeps the maze connected, the motif is skipped and the program says
+so in the header.
 
 The shortest path is found with a **breadth-first search** from the entry,
 which visits cells in order of distance, so the first route reaching the exit
@@ -140,6 +155,17 @@ whose bits say which walls are closed (1 north, 2 east, 4 south, 8 west);
 `maze.blocked` holds the cells of the "42"; `maze.solve()` returns a shortest
 solution. The in-memory structure uses the same wall encoding as the output
 file.
+
+### Drawing the maze
+
+`display.py` builds the picture on a character canvas of
+`height * 2 + 1` rows by `width * 4 + 1` columns: even rows hold the
+horizontal walls, odd rows hold the cells and the vertical walls. It draws
+the walls first (reading the same wall bits as the output file, with the
+border always closed), then the solution path, then the marks for the entry,
+the exit and the "42". The corner glyph of each path cell is chosen from the
+set of directions the path uses there, which is why the solution reads as one
+continuous line instead of a trail of dots.
 
 ## Resources
 

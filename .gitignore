@@ -10,3 +10,5 @@ venv/
 # generated maze output
 maze.txt
 o*.txt
+# macOS
+.DS_Store

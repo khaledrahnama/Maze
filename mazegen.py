@@ -113,39 +113,58 @@ class MazeGenerator:
     def _place_42(self) -> None:
         """Choose where the closed "42" motif fits.
 
-        Tries every offset and keeps the first one that avoids the entry, the
-        exit, the four corners and the centre, and still leaves every other
-        cell reachable. Sets :attr:`blocked` and :attr:`motif_message`; the
-        motif is skipped (with a message) when the maze is too small.
+        Starts at the centre of the maze and tries positions in rings
+        around it, keeping the first one that avoids the entry, the exit, the
+        four corners and the centre cell, and still leaves every other cell
+        reachable. Sets :attr:`blocked` and :attr:`motif_message`; the motif
+        is skipped (with a message) when the maze is too small or when no
+        placement keeps the maze connected.
         """
         pattern = [
-            "#..#..####",
-            "#..#.....#",
-            "####..####",
-            "...#..#...",
-            "...#..####"]
+            "#..#.####",
+            "#..#....#",
+            "####.####",
+            "...#.#...",
+            "...#.####",
+        ]
+        ph, pw = len(pattern), len(pattern[0])
         protected = {self.entry, self.exit, (0, 0), (self.width - 1, 0),
                      (0, self.height - 1), (self.width - 1, self.height - 1),
                      (self.width // 2, self.height // 2)}
         self.blocked = set()
-        for oy in range(1, self.height - len(pattern)):
-            for ox in range(1, self.width - len(pattern[0])):
-                cells = {(ox + x, oy + y) for y, row in enumerate(pattern)
-                         for x, value in enumerate(row) if value == "#"}
-                if cells & protected:
-                    continue
-                self.blocked = cells
-                seen, stack = {self.entry}, [self.entry]
-                while stack:
-                    for x, y, *_ in self.neighbors(stack.pop()):
-                        if (x, y) not in seen:
-                            seen.add((x, y))
-                            stack.append((x, y))
-                if len(seen) == self.width * self.height - len(cells):
-                    self.motif_message = "42 motif included."
-                    return
+        if self.width < pw or self.height < ph:
+            self.motif_message = "42 omitted: maze too small."
+            return
+        center_x, center_y = (self.width - pw) // 2, (self.height - ph) // 2
+        # Try the centre first, then rings of positions around it.
+        positions = [
+            (center_x + dx, center_y + dy)
+            for distance in range(max(self.width, self.height))
+            for dy in range(-distance, distance + 1)
+            for dx in range(-distance, distance + 1)
+            if max(abs(dx), abs(dy)) == distance
+        ]
+        for ox, oy in positions:
+            if ox < 0 or oy < 0 or ox + pw > self.width:
+                continue
+            if oy + ph > self.height:
+                continue
+            cells = {(ox + x, oy + y) for y, row in enumerate(pattern)
+                     for x, value in enumerate(row) if value == "#"}
+            if cells & protected:
+                continue
+            self.blocked = cells
+            seen, stack = {self.entry}, [self.entry]
+            while stack:
+                for x, y, *_ in self.neighbors(stack.pop()):
+                    if (x, y) not in seen:
+                        seen.add((x, y))
+                        stack.append((x, y))
+            if len(seen) == self.width * self.height - len(cells):
+                self.motif_message = "42 motif included."
+                return
         self.blocked = set()
-        self.motif_message = "42 omitted: not enough suitable space."
+        self.motif_message = "42 omitted: no valid placement found."
 
     def _open(self, cell: tuple[int, int],
               neighbor: tuple[int, int, int, int, str]) -> None:
