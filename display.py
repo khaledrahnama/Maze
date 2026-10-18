@@ -13,7 +13,12 @@ class MazeDisplay:
     BOLD = "\033[1m"
     DIM = "\033[2m"
 
-    COLORS = {
+    GREEN = "\033[1;32m"
+    RED = "\033[1;31m"
+    YELLOW = "\033[1;33m"
+
+    # Wall and solution path colours are independent.
+    WALL_COLORS = {
         "Cyan": "\033[36m",
         "Green": "\033[32m",
         "Yellow": "\033[33m",
@@ -21,6 +26,36 @@ class MazeDisplay:
         "Blue": "\033[34m",
         "White": "\033[37m",
     }
+
+    PATH_COLOR = "\033[1;31m"
+
+    OPPOSITE = {
+        "N": "S",
+        "E": "W",
+        "S": "N",
+        "W": "E",
+    }
+
+    PATH_CHARS = {
+        frozenset(("N", "S")): "┃",
+        frozenset(("E", "W")): "━",
+        frozenset(("N", "E")): "┗",
+        frozenset(("N", "W")): "┛",
+        frozenset(("S", "E")): "┏",
+        frozenset(("S", "W")): "┓",
+        frozenset(("N", "E", "S")): "┣",
+        frozenset(("N", "W", "S")): "┫",
+        frozenset(("E", "S", "W")): "┳",
+        frozenset(("N", "E", "W")): "┻",
+        frozenset(("N", "E", "S", "W")): "╋",
+    }
+
+    NORTH = 1
+    EAST = 2
+    SOUTH = 4
+    WEST = 8
+
+    CELL_WIDTH = 4
 
     def __init__(
         self,
@@ -36,12 +71,12 @@ class MazeDisplay:
     @property
     def wall_color(self) -> str:
         """Return the selected wall colour."""
-        return list(self.COLORS.values())[self.color_index]
+        return list(self.WALL_COLORS.values())[self.color_index]
 
     @property
     def color_name(self) -> str:
-        """Return the selected colour name."""
-        return list(self.COLORS)[self.color_index]
+        """Return the selected wall colour name."""
+        return list(self.WALL_COLORS)[self.color_index]
 
     def _paint(self, text: str, color: str) -> str:
         """Apply an ANSI colour to text."""
@@ -49,93 +84,244 @@ class MazeDisplay:
             return text
         return f"{color}{text}{self.RESET}"
 
-    def _path_cells(self) -> set[tuple[int, int]]:
-        """Return the cells belonging to the shortest path."""
-        cells = {self.maze.entry}
+    def _path_directions(
+        self,
+    ) -> dict[tuple[int, int], set[str]]:
+        """Return the directions used by the solution path."""
+        connections: dict[tuple[int, int], set[str]] = {}
         x, y = self.maze.entry
+        connections[(x, y)] = set()
 
         for letter in self.maze.solve():
             direction = next(
                 item for item in DIRECTIONS if item[4] == letter
             )
-            x += direction[2]
-            y += direction[3]
-            cells.add((x, y))
+            dx, dy = direction[2], direction[3]
+            nx, ny = x + dx, y + dy
 
-        return cells
-
-    def render(self) -> str:
-        """Render the maze with aligned two-character cell interiors."""
-        width = self.maze.width
-        height = self.maze.height
-        grid = self.maze.grid
-        path = self._path_cells() if self.show_path else set()
-        walls = self.wall_color
-        rows: list[str] = []
-
-        def horizontal(x: int, y: int, bit: int) -> str:
-            """Render a horizontal cell boundary."""
-            if grid[y][x] & bit:
-                return self._paint("──", walls)
-            return "  "
-
-        def vertical(x: int, y: int, bit: int) -> str:
-            """Render a vertical cell boundary."""
-            if grid[y][x] & bit:
-                return self._paint("│", walls)
-            return " "
-
-        # Top border.
-        top = self._paint("┌", walls)
-        for x in range(width):
-            top += horizontal(x, 0, 1)
-            top += self._paint(
-                "┬" if x < width - 1 else "┐",
-                walls,
+            connections.setdefault((x, y), set()).add(letter)
+            connections.setdefault((nx, ny), set()).add(
+                self.OPPOSITE[letter]
             )
-        rows.append(top)
+            x, y = nx, ny
+
+        return connections
+
+    def _wall_bits(self, x: int, y: int) -> int:
+        """Return wall bits, enforcing the outside boundary."""
+        bits = self.maze.grid[y][x]
+
+        if y == 0:
+            bits |= self.NORTH
+        if x == self.maze.width - 1:
+            bits |= self.EAST
+        if y == self.maze.height - 1:
+            bits |= self.SOUTH
+        if x == 0:
+            bits |= self.WEST
+
+        return bits
+
+    def _junction(
+        self,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+    ) -> str:
+        """Return the heavy wall junction at a grid intersection."""
+        if x == 0 and y == 0:
+            return "┏"
+        if x == width and y == 0:
+            return "┓"
+        if x == 0 and y == height:
+            return "┗"
+        if x == width and y == height:
+            return "┛"
+        if y == 0:
+            return "┳"
+        if y == height:
+            return "┻"
+        if x == 0:
+            return "┣"
+        if x == width:
+            return "┫"
+        return "╋"
+
+    def _draw_walls(
+        self,
+        canvas: list[list[str]],
+        colors: list[list[str]],
+        width: int,
+        height: int,
+    ) -> None:
+        """Draw maze walls and assign their colour."""
+        cell_width = self.CELL_WIDTH
 
         for y in range(height):
-            # Cell contents.
-            middle = ""
             for x in range(width):
-                middle += vertical(x, y, 8)
+                bits = self._wall_bits(x, y)
+                left = x * cell_width
+                right = (x + 1) * cell_width
+                top = 2 * y
+                bottom = 2 * y + 2
+
+                if bits & self.NORTH:
+                    for col in range(left + 1, right):
+                        canvas[top][col] = "━"
+                        colors[top][col] = self.wall_color
+
+                if bits & self.SOUTH:
+                    for col in range(left + 1, right):
+                        canvas[bottom][col] = "━"
+                        colors[bottom][col] = self.wall_color
+
+                if bits & self.WEST:
+                    canvas[top + 1][left] = "┃"
+                    colors[top + 1][left] = self.wall_color
+
+                if bits & self.EAST:
+                    canvas[top + 1][right] = "┃"
+                    colors[top + 1][right] = self.wall_color
+
+        # Draw junctions last so wall intersections stay consistent.
+        for y in range(height + 1):
+            for x in range(width + 1):
+                row = 2 * y
+                col = x * cell_width
+                canvas[row][col] = self._junction(
+                    x, y, width, height
+                )
+                colors[row][col] = self.wall_color
+
+    
+    def _draw_path(
+        self,
+        canvas: list[list[str]],
+        colors: list[list[str]],
+        path: dict[tuple[int, int], set[str]],
+    ) -> None:
+        """Draw continuous solution segments through open corridors."""
+        cell_width = self.CELL_WIDTH
+
+        for (x, y), directions in path.items():
+            center_x = x * cell_width + cell_width // 2
+            center_y = 2 * y + 1
+            bits = self._wall_bits(x, y)
+
+            if "W" in directions and not bits & self.WEST:
+                for col in range(center_x - 1, x * cell_width, -1):
+                    canvas[center_y][col] = "━"
+                    colors[center_y][col] = self.PATH_COLOR
+
+            if "E" in directions and not bits & self.EAST:
+                for col in range(
+                    center_x + 1,
+                    (x + 1) * cell_width,
+                ):
+                    canvas[center_y][col] = "━"
+                    colors[center_y][col] = self.PATH_COLOR
+
+            if "N" in directions and not bits & self.NORTH:
+                canvas[center_y - 1][center_x] = "┃"
+                colors[center_y - 1][center_x] = self.PATH_COLOR
+
+            if "S" in directions and not bits & self.SOUTH:
+                canvas[center_y + 1][center_x] = "┃"
+                colors[center_y + 1][center_x] = self.PATH_COLOR
+
+            # Connect to the next cell across open boundaries.
+            if "E" in directions and x + 1 < self.maze.width:
+                if not (self._wall_bits(x + 1, y) & self.WEST):
+                    canvas[center_y][center_x + 2] = "━"
+                    colors[center_y][center_x + 2] = self.PATH_COLOR
+
+            if "S" in directions and y + 1 < self.maze.height:
+                if not (self._wall_bits(x, y + 1) & self.NORTH):
+                    canvas[center_y + 1][center_x] = "┃"
+                    colors[center_y + 1][center_x] = self.PATH_COLOR
+
+    def _draw_cell_marks(
+        self,
+        canvas: list[list[str]],
+        colors: list[list[str]],
+        path: dict[tuple[int, int], set[str]],
+    ) -> None:
+        """Draw entry, exit, motif, and path-cell centres."""
+        for y in range(self.maze.height):
+            for x in range(self.maze.width):
                 cell = (x, y)
+                row = 2 * y + 1
+                col = x * self.CELL_WIDTH + self.CELL_WIDTH // 2
 
-                if cell == self.maze.entry:
-                    mark = self._paint("S ", "\033[32m")
-                elif cell == self.maze.exit:
-                    mark = self._paint("E ", "\033[31m")
+                if cell == self.maze.entry or cell == self.maze.exit:
+                    label = "S" if cell == self.maze.entry else "E"
+                    start = col - 2
+
+                    for offset in range(6):
+                        canvas[row][start + offset] = " "
+                        colors[row][start + offset] = "\033[47m"
+
+                    canvas[row][col] = label
+                    colors[row][col] = self.GREEN
                 elif cell in self.maze.blocked:
-                    mark = self._paint("42", "\033[33m")
+                    canvas[row][col - 1] = "█"
+                    canvas[row][col] = "█"
+                    colors[row][col - 1] = self.YELLOW
+                    colors[row][col] = self.YELLOW
                 elif self.show_path and cell in path:
-                    mark = self._paint("· ", "\033[32m")
-                else:
-                    mark = "  "
+                    directions = frozenset(path[cell])
+                    char = self.PATH_CHARS.get(directions)
 
-                middle += mark
+                    if char:
+                        canvas[row][col] = char
+                    elif directions:
+                        direction = next(iter(directions))
+                        canvas[row][col] = (
+                            "━" if direction in ("E", "W") else "┃"
+                        )
 
-            middle += self._paint("│", walls)
-            rows.append(middle)
+                    colors[row][col] = self.PATH_COLOR
 
-            # Boundary below this row.
-            is_bottom = y == height - 1
-            boundary = self._paint(
-                "└" if is_bottom else "├",
-                walls,
-            )
+    def render(self) -> str:
+        """Render walls and solution with independent colours."""
+        width = self.maze.width
+        height = self.maze.height
+        canvas_width = width * self.CELL_WIDTH + 1
+        canvas_height = height * 2 + 1
 
-            for x in range(width):
-                boundary += horizontal(x, y, 4)
+        canvas = [
+            [" " for _ in range(canvas_width)]
+            for _ in range(canvas_height)
+        ]
+        colors = [
+            ["" for _ in range(canvas_width)]
+            for _ in range(canvas_height)
+        ]
 
-                if is_bottom:
-                    junction = "┴" if x < width - 1 else "┘"
-                else:
-                    junction = "┼" if x < width - 1 else "┤"
+        path = self._path_directions() if self.show_path else {}
 
-                boundary += self._paint(junction, walls)
+        self._draw_walls(canvas, colors, width, height)
 
-            rows.append(boundary)
+        if self.show_path:
+            self._draw_path(canvas, colors, path)
+
+        self._draw_cell_marks(canvas, colors, path)
+
+        rows: list[str] = []
+
+        for row_index, row in enumerate(canvas):
+            rendered = ""
+
+            for col_index, char in enumerate(row):
+                if char == " ":
+                    rendered += char
+                    continue
+
+                color = colors[row_index][col_index] or self.wall_color
+                rendered += self._paint(char, color)
+
+            rows.append(rendered)
 
         return "\n".join(rows)
 
@@ -146,11 +332,19 @@ class MazeDisplay:
     def _header(self) -> None:
         """Display the title and maze status."""
         terminal_width = shutil.get_terminal_size((80, 24)).columns
-        width = min(max(self.maze.width * 4 + 1, 40), terminal_width)
+        width = min(
+            max(self.maze.width * self.CELL_WIDTH + 1, 40),
+            terminal_width,
+        )
         line = "═" * width
 
         print(self._paint(line, self.wall_color))
-        print(self._paint("A - M A Z E - I N G".center(width), self.BOLD))
+        print(
+            self._paint(
+                "A - M A Z E - I N G".center(width),
+                self.BOLD,
+            )
+        )
         print(
             self._paint(
                 "42 SCHOOL | MAZE GENERATOR".center(width),
@@ -158,18 +352,20 @@ class MazeDisplay:
             )
         )
         print(self._paint(line, self.wall_color))
-        print(
-            f" MODE: {'PERFECT' if self.maze.perfect else 'PLAYABLE'}"
-            f"   PATH: {'ON' if self.show_path else 'OFF'}"
-        )
+
+        mode = "PERFECT" if self.maze.perfect else "PLAYABLE"
+        path_status = "ON" if self.show_path else "OFF"
+
+        print(f" MODE: {mode}   PATH: {path_status}")
         print(f" ENTRY: {self.maze.entry}   EXIT: {self.maze.exit}")
         print(f" WALLS: {self.color_name}")
+        print(f" PATH COLOUR: {self._paint('SOLUTION', self.PATH_COLOR)}")
 
         if self.maze.motif_message:
             print(
                 self._paint(
-                    " NOTE: 42 motif unavailable for this maze size.",
-                    "\033[33m",
+                    f" NOTE: {self.maze.motif_message}",
+                    self.YELLOW,
                 )
             )
 
@@ -214,7 +410,7 @@ class MazeDisplay:
             elif choice == "c":
                 self.color_index = (
                     self.color_index + 1
-                ) % len(self.COLORS)
+                ) % len(self.WALL_COLORS)
             elif choice == "q":
                 print("Goodbye.")
                 break
