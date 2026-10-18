@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mazegen"
+version = "1.0.0"
+description = "Reusable seeded maze generator with perfect and playable modes"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE.md" }
+keywords = ["maze", "generator", "spanning-tree", "pathfinding"]
+
+[tool.setuptools]
+py-modules = ["mazegen"]

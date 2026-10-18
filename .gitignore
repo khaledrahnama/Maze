@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+# generated maze output
+maze.txt
+o*.txt
