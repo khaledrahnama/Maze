@@ -1,16 +1,5 @@
 
-"""Terminal display and interactive controls for A-Maze-ing.
-
-This module is the user interface of the command-line program: it draws a
-maze built by :mod:`mazegen` with box-drawing characters and runs the menu.
-It is deliberately kept out of the reusable module, which must stay free of
-input and output.
-
-The picture is built on a character canvas of (height * 2 + 1) rows and
-(width * CELL_WIDTH + 1) columns: even rows carry horizontal walls, odd rows
-carry cells and vertical walls. Walls are drawn first, then the solution
-path, then the marks for the entry, the exit and the "42".
-"""
+"""Terminal display and interactive controls for A-Maze-ing."""
 
 import shutil
 
@@ -18,24 +7,18 @@ from mazegen import DIRECTIONS, MazeGenerator
 
 
 class MazeDisplay:
-    """Render and control a generated maze in the terminal.
-
-    Attributes:
-        maze: The generator holding the maze to show.
-        output_file: File rewritten when the user regenerates the maze.
-        show_path: Whether the shortest path is currently drawn.
-        color_index: Index of the current wall colour in :attr:`COLORS`.
-        motif_index: Index of the current "42" colour in :attr:`MOTIF_COLORS`.
-    """
+    """Render and control a generated maze in the terminal."""
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
     DIM = "\033[2m"
+
     GREEN = "\033[1;32m"
     RED = "\033[1;31m"
     YELLOW = "\033[1;33m"
 
-    COLORS = {
+    # Wall and solution path colours are independent.
+    WALL_COLORS = {
         "Cyan": "\033[36m",
         "Green": "\033[32m",
         "Yellow": "\033[33m",
@@ -44,20 +27,13 @@ class MazeDisplay:
         "White": "\033[37m",
     }
 
-    # Direction letters use the same convention as mazegen.py.
+    PATH_COLOR = "\033[1;31m"
+
     OPPOSITE = {
         "N": "S",
         "E": "W",
         "S": "N",
         "W": "E",
-    }
-
-    # Colours offered for the "42" motif by the [M] control.
-    MOTIF_COLORS = {
-        "Yellow": "\033[1;33m",
-        "Red": "\033[1;31m",
-        "Magenta": "\033[1;35m",
-        "Blue": "\033[1;34m",
     }
 
     PATH_CHARS = {
@@ -74,7 +50,6 @@ class MazeDisplay:
         frozenset(("N", "E", "S", "W")): "╋",
     }
 
-    # Wall bitmasks: N=1, E=2, S=4, W=8.
     NORTH = 1
     EAST = 2
     SOUTH = 4
@@ -87,49 +62,24 @@ class MazeDisplay:
         maze: MazeGenerator,
         output_file: str,
     ) -> None:
-        """Prepare the display for one maze.
-
-        Args:
-            maze: A generator whose :meth:`mazegen.MazeGenerator.generate`
-                has already been called.
-            output_file: Path rewritten when the user regenerates the maze.
-        """
+        """Initialize the display."""
         self.maze = maze
         self.output_file = output_file
         self.show_path = True
         self.color_index = 0
-        self.motif_index = 0
 
     @property
     def wall_color(self) -> str:
-        """str: ANSI escape code of the current wall colour."""
-        return list(self.COLORS.values())[self.color_index]
+        """Return the selected wall colour."""
+        return list(self.WALL_COLORS.values())[self.color_index]
 
     @property
     def color_name(self) -> str:
-        """str: Readable name of the current wall colour."""
-        return list(self.COLORS)[self.color_index]
-
-    @property
-    def motif_color(self) -> str:
-        """str: ANSI escape code of the current "42" colour."""
-        return list(self.MOTIF_COLORS.values())[self.motif_index]
-
-    @property
-    def motif_color_name(self) -> str:
-        """str: Readable name of the current "42" colour."""
-        return list(self.MOTIF_COLORS)[self.motif_index]
+        """Return the selected wall colour name."""
+        return list(self.WALL_COLORS)[self.color_index]
 
     def _paint(self, text: str, color: str) -> str:
-        """Wrap text in an ANSI colour.
-
-        Args:
-            text: The text to colour.
-            color: An ANSI escape code, or "" to leave the text as it is.
-
-        Returns:
-            The text, followed by a reset code when a colour was applied.
-        """
+        """Apply an ANSI colour to text."""
         if not color:
             return text
         return f"{color}{text}{self.RESET}"
@@ -137,15 +87,7 @@ class MazeDisplay:
     def _path_directions(
         self,
     ) -> dict[tuple[int, int], set[str]]:
-        """Walk the solution and note how it enters and leaves each cell.
-
-        Returns:
-            For every cell on the shortest path, the set of directions used
-            there, which decides the corner glyph drawn in that cell.
-
-        Raises:
-            ValueError: If the maze has no solution.
-        """
+        """Return the directions used by the solution path."""
         connections: dict[tuple[int, int], set[str]] = {}
         x, y = self.maze.entry
         connections[(x, y)] = set()
@@ -166,16 +108,7 @@ class MazeDisplay:
         return connections
 
     def _wall_bits(self, x: int, y: int) -> int:
-        """Return the wall bits of a cell, with the border forced closed.
-
-        Args:
-            x: Column of the cell.
-            y: Row of the cell.
-
-        Returns:
-            The cell value with the outer border bits set, so the frame is
-            always drawn even if a generator opened a border wall.
-        """
+        """Return wall bits, enforcing the outside boundary."""
         bits = self.maze.grid[y][x]
 
         if y == 0:
@@ -196,17 +129,7 @@ class MazeDisplay:
         width: int,
         height: int,
     ) -> str:
-        """Pick the box-drawing character for one wall intersection.
-
-        Args:
-            x: Column of the intersection, from 0 to width.
-            y: Row of the intersection, from 0 to height.
-            width: Number of columns of the maze.
-            height: Number of rows of the maze.
-
-        Returns:
-            The corner, edge or cross character for that position.
-        """
+        """Return the heavy wall junction at a grid intersection."""
         if x == 0 and y == 0:
             return "┏"
         if x == width and y == 0:
@@ -228,16 +151,11 @@ class MazeDisplay:
     def _draw_walls(
         self,
         canvas: list[list[str]],
+        colors: list[list[str]],
         width: int,
         height: int,
     ) -> None:
-        """Draw every wall of the maze on the canvas.
-
-        Args:
-            canvas: The character grid to draw on, changed in place.
-            width: Number of columns of the maze.
-            height: Number of rows of the maze.
-        """
+        """Draw maze walls and assign their colour."""
         cell_width = self.CELL_WIDTH
 
         for y in range(height):
@@ -251,67 +169,77 @@ class MazeDisplay:
                 if bits & self.NORTH:
                     for col in range(left + 1, right):
                         canvas[top][col] = "━"
+                        colors[top][col] = self.wall_color
 
                 if bits & self.SOUTH:
                     for col in range(left + 1, right):
                         canvas[bottom][col] = "━"
+                        colors[bottom][col] = self.wall_color
 
                 if bits & self.WEST:
                     canvas[top + 1][left] = "┃"
+                    colors[top + 1][left] = self.wall_color
 
                 if bits & self.EAST:
                     canvas[top + 1][right] = "┃"
+                    colors[top + 1][right] = self.wall_color
 
-        # Junctions are drawn after wall segments.
+        # Draw junctions last so wall intersections stay consistent.
         for y in range(height + 1):
             for x in range(width + 1):
-                canvas[2 * y][x * cell_width] = self._junction(
+                row = 2 * y
+                col = x * cell_width
+                canvas[row][col] = self._junction(
                     x, y, width, height
                 )
+                colors[row][col] = self.wall_color
 
+    
     def _draw_path(
         self,
         canvas: list[list[str]],
+        colors: list[list[str]],
         path: dict[tuple[int, int], set[str]],
     ) -> None:
-        """Draw the solution path, never crossing a closed wall.
-
-        Args:
-            canvas: The character grid to draw on, changed in place.
-            path: The directions used in each cell of the path.
-        """
+        """Draw continuous solution segments through open corridors."""
         cell_width = self.CELL_WIDTH
 
         for (x, y), directions in path.items():
             center_x = x * cell_width + cell_width // 2
             center_y = 2 * y + 1
+            bits = self._wall_bits(x, y)
 
-            # Draw horizontal connections inside the cell.
-            if "W" in directions:
-                if not (self._wall_bits(x, y) & self.WEST):
-                    canvas[center_y][center_x - 1] = "━"
+            if "W" in directions and not bits & self.WEST:
+                for col in range(center_x - 1, x * cell_width, -1):
+                    canvas[center_y][col] = "━"
+                    colors[center_y][col] = self.PATH_COLOR
 
-            if "E" in directions:
-                if not (self._wall_bits(x, y) & self.EAST):
-                    canvas[center_y][center_x + 1] = "━"
+            if "E" in directions and not bits & self.EAST:
+                for col in range(
+                    center_x + 1,
+                    (x + 1) * cell_width,
+                ):
+                    canvas[center_y][col] = "━"
+                    colors[center_y][col] = self.PATH_COLOR
 
-            # Draw vertical connections inside the cell.
-            if "N" in directions:
-                if not (self._wall_bits(x, y) & self.NORTH):
-                    canvas[center_y - 1][center_x] = "┃"
+            if "N" in directions and not bits & self.NORTH:
+                canvas[center_y - 1][center_x] = "┃"
+                colors[center_y - 1][center_x] = self.PATH_COLOR
 
-            if "S" in directions:
-                if not (self._wall_bits(x, y) & self.SOUTH):
-                    canvas[center_y + 1][center_x] = "┃"
+            if "S" in directions and not bits & self.SOUTH:
+                canvas[center_y + 1][center_x] = "┃"
+                colors[center_y + 1][center_x] = self.PATH_COLOR
 
-            # Draw connections across open cell boundaries.
+            # Connect to the next cell across open boundaries.
             if "E" in directions and x + 1 < self.maze.width:
-                if not (self._wall_bits(x, y) & self.EAST):
+                if not (self._wall_bits(x + 1, y) & self.WEST):
                     canvas[center_y][center_x + 2] = "━"
+                    colors[center_y][center_x + 2] = self.PATH_COLOR
 
             if "S" in directions and y + 1 < self.maze.height:
-                if not (self._wall_bits(x, y) & self.SOUTH):
+                if not (self._wall_bits(x, y + 1) & self.NORTH):
                     canvas[center_y + 1][center_x] = "┃"
+                    colors[center_y + 1][center_x] = self.PATH_COLOR
 
     def _draw_cell_marks(
         self,
@@ -319,55 +247,44 @@ class MazeDisplay:
         colors: list[list[str]],
         path: dict[tuple[int, int], set[str]],
     ) -> None:
-        """Mark the entry, the exit, the "42" and the path cells.
-
-        Args:
-            canvas: The character grid to draw on, changed in place.
-            colors: The colour of each character, changed in place.
-            path: The directions used in each cell of the path.
-        """
+        """Draw entry, exit, motif, and path-cell centres."""
         for y in range(self.maze.height):
             for x in range(self.maze.width):
                 cell = (x, y)
                 row = 2 * y + 1
                 col = x * self.CELL_WIDTH + self.CELL_WIDTH // 2
 
-                if cell == self.maze.entry:
-                    canvas[row][col] = "S"
+                if cell == self.maze.entry or cell == self.maze.exit:
+                    label = "S" if cell == self.maze.entry else "E"
+                    start = col - 2
+
+                    for offset in range(6):
+                        canvas[row][start + offset] = " "
+                        colors[row][start + offset] = "\033[47m"
+
+                    canvas[row][col] = label
                     colors[row][col] = self.GREEN
-                elif cell == self.maze.exit:
-                    canvas[row][col] = "E"
-                    colors[row][col] = self.RED
                 elif cell in self.maze.blocked:
                     canvas[row][col - 1] = "█"
                     canvas[row][col] = "█"
-                    colors[row][col - 1] = self.motif_color
-                    colors[row][col] = self.motif_color
+                    colors[row][col - 1] = self.YELLOW
+                    colors[row][col] = self.YELLOW
                 elif self.show_path and cell in path:
                     directions = frozenset(path[cell])
                     char = self.PATH_CHARS.get(directions)
 
                     if char:
                         canvas[row][col] = char
-                        colors[row][col] = self.GREEN
                     elif directions:
-                        # Start/end cells may have only one connection.
                         direction = next(iter(directions))
                         canvas[row][col] = (
                             "━" if direction in ("E", "W") else "┃"
                         )
-                        colors[row][col] = self.GREEN
+
+                    colors[row][col] = self.PATH_COLOR
 
     def render(self) -> str:
-        """Build the whole picture.
-
-        Returns:
-            The maze as one multi-line coloured string: "S" is the entry,
-            "E" the exit, blocks are the "42" and the line is the solution.
-
-        Raises:
-            ValueError: If the maze has no solution.
-        """
+        """Render walls and solution with independent colours."""
         width = self.maze.width
         height = self.maze.height
         canvas_width = width * self.CELL_WIDTH + 1
@@ -384,10 +301,10 @@ class MazeDisplay:
 
         path = self._path_directions() if self.show_path else {}
 
-        self._draw_walls(canvas, width, height)
+        self._draw_walls(canvas, colors, width, height)
 
         if self.show_path:
-            self._draw_path(canvas, path)
+            self._draw_path(canvas, colors, path)
 
         self._draw_cell_marks(canvas, colors, path)
 
@@ -397,29 +314,11 @@ class MazeDisplay:
             rendered = ""
 
             for col_index, char in enumerate(row):
-                if char in (" ",):
+                if char == " ":
                     rendered += char
                     continue
 
-                # Keep outer walls and junctions in the wall colour.
-                is_junction = (
-                    row_index % 2 == 0
-                    and col_index % self.CELL_WIDTH == 0
-                )
-                is_outer_wall = (
-                    row_index == 0
-                    or row_index == canvas_height - 1
-                    or col_index == 0
-                    or col_index == canvas_width - 1
-                )
-
-                color = self.wall_color if (
-                    is_junction or is_outer_wall
-                ) else colors[row_index][col_index]
-
-                if not color:
-                    color = self.wall_color
-
+                color = colors[row_index][col_index] or self.wall_color
                 rendered += self._paint(char, color)
 
             rows.append(rendered)
@@ -427,11 +326,11 @@ class MazeDisplay:
         return "\n".join(rows)
 
     def _clear_screen(self) -> None:
-        """Move the cursor home and clear the terminal."""
+        """Clear the terminal display."""
         print("\033[2J\033[H", end="")
 
     def _header(self) -> None:
-        """Print the title and the current state of the maze."""
+        """Display the title and maze status."""
         terminal_width = shutil.get_terminal_size((80, 24)).columns
         width = min(
             max(self.maze.width * self.CELL_WIDTH + 1, 40),
@@ -440,7 +339,12 @@ class MazeDisplay:
         line = "═" * width
 
         print(self._paint(line, self.wall_color))
-        print(self._paint("A - M A Z E - I N G".center(width), self.BOLD))
+        print(
+            self._paint(
+                "A - M A Z E - I N G".center(width),
+                self.BOLD,
+            )
+        )
         print(
             self._paint(
                 "42 SCHOOL | MAZE GENERATOR".center(width),
@@ -454,7 +358,8 @@ class MazeDisplay:
 
         print(f" MODE: {mode}   PATH: {path_status}")
         print(f" ENTRY: {self.maze.entry}   EXIT: {self.maze.exit}")
-        print(f" WALLS: {self.color_name}   42: {self.motif_color_name}")
+        print(f" WALLS: {self.color_name}")
+        print(f" PATH COLOUR: {self._paint('SOLUTION', self.PATH_COLOR)}")
 
         if self.maze.motif_message:
             print(
@@ -467,39 +372,21 @@ class MazeDisplay:
         print()
 
     def _menu(self) -> None:
-        """Print the keyboard controls."""
+        """Display keyboard controls."""
         print(self._paint(" CONTROLS", self.BOLD))
         print(" [R]  Regenerate maze")
         print(" [P]  Show / hide shortest path")
         print(" [C]  Change wall colour")
-        print(" [M]  Change 42 colour")
         print(" [Q]  Quit")
         print()
 
     def _regenerate(self) -> None:
-        """Build a new maze and rewrite the output file.
-
-        Raises:
-            ValueError: If a playable board cannot be braided at this size.
-            OSError: If the output file cannot be written.
-        """
+        """Generate a new maze and save it."""
         self.maze.generate()
         self.maze.write(self.output_file)
 
-    def _pause(self, message: str) -> None:
-        """Show a message and wait for Enter, ignoring the end of input.
-
-        Args:
-            message: The line to show before waiting.
-        """
-        print(message)
-        try:
-            input(" Press Enter to continue...")
-        except (EOFError, KeyboardInterrupt):
-            pass
-
     def run(self) -> None:
-        """Show the maze and handle the controls until the user quits."""
+        """Run the interactive terminal interface."""
         while True:
             self._clear_screen()
             self._header()
@@ -516,19 +403,17 @@ class MazeDisplay:
                 try:
                     self._regenerate()
                 except (ValueError, OSError) as error:
-                    self._pause(f" Could not regenerate maze: {error}")
+                    print(f"Could not regenerate maze: {error}")
+                    input("Press Enter to continue...")
             elif choice == "p":
                 self.show_path = not self.show_path
             elif choice == "c":
                 self.color_index = (
                     self.color_index + 1
-                ) % len(self.COLORS)
-            elif choice == "m":
-                self.motif_index = (
-                    self.motif_index + 1
-                ) % len(self.MOTIF_COLORS)
+                ) % len(self.WALL_COLORS)
             elif choice == "q":
                 print("Goodbye.")
                 break
             else:
-                self._pause(" Invalid option. Choose R, P, C, M or Q.")
+                print("Invalid option. Choose R, P, C, or Q.")
+                input("Press Enter to continue...")

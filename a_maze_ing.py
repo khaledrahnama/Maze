@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import sys
 from display import MazeDisplay
 from mazegen import MazeGenerator
+from display import MazeDisplay
 
 
 class ConfigError(ValueError):
@@ -110,21 +111,31 @@ def load(path: str) -> Settings:
                     values["PERFECT"].lower() == "true", seed)
 
 
-def main() -> None:
-    """Run the program and report every problem without a traceback.
 
-    Exits with the status 1 after an error, and 0 after a normal quit, so
-    that scripts and the Moulinette can tell the difference.
-    """
+def main() -> None:
+    """Load the configuration and launch the maze interface."""
     try:
         if len(sys.argv) != 2:
-            raise ConfigError("usage: python3 a_maze_ing.py config.txt")
+            raise ConfigError(
+                "usage: python3 a_maze_ing.py config.txt"
+            )
+
         settings = load(sys.argv[1])
-        maze = MazeGenerator(settings.width, settings.height, settings.entry,
-                             settings.exit, settings.perfect, settings.seed)
+        maze = MazeGenerator(
+            settings.width,
+            settings.height,
+            settings.entry,
+            settings.exit,
+            settings.perfect,
+            settings.seed,
+        )
+
         maze.generate()
         maze.write(settings.output_file)
-        MazeDisplay(maze, settings.output_file).run()
+
+        display = MazeDisplay(maze, settings.output_file)
+        display.run()
+
     except (EOFError, KeyboardInterrupt):
         print("\nGoodbye.")
     except (ValueError, OSError) as error:
