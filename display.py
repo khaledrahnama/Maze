@@ -28,6 +28,7 @@ class MazeDisplay:
     }
 
     PATH_COLOR = "\033[1;31m"
+    MARK_BACKGROUND = "\033[47m"
 
     OPPOSITE = {
         "N": "S",
@@ -194,7 +195,6 @@ class MazeDisplay:
                 )
                 colors[row][col] = self.wall_color
 
-    
     def _draw_path(
         self,
         canvas: list[list[str]],
@@ -256,14 +256,14 @@ class MazeDisplay:
 
                 if cell == self.maze.entry or cell == self.maze.exit:
                     label = "S" if cell == self.maze.entry else "E"
-                    start = col - 2
 
-                    for offset in range(6):
-                        canvas[row][start + offset] = " "
-                        colors[row][start + offset] = "\033[47m"
-
+                    # Highlight the inside of the cell only. The columns of
+                    # the side walls belong to the frame, and writing past
+                    # them would also run off the canvas on the last column.
                     canvas[row][col] = label
-                    colors[row][col] = self.GREEN
+                    colors[row][col] = self.MARK_BACKGROUND + (
+                        self.GREEN if cell == self.maze.entry else self.RED
+                    )
                 elif cell in self.maze.blocked:
                     canvas[row][col - 1] = "█"
                     canvas[row][col] = "█"

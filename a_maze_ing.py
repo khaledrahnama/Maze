@@ -11,7 +11,6 @@ from dataclasses import dataclass
 import sys
 from display import MazeDisplay
 from mazegen import MazeGenerator
-from display import MazeDisplay
 
 
 class ConfigError(ValueError):
@@ -109,7 +108,6 @@ def load(path: str) -> Settings:
         raise ConfigError("OUTPUT_FILE must not be empty")
     return Settings(width, height, entry, exit_pos, values["OUTPUT_FILE"],
                     values["PERFECT"].lower() == "true", seed)
-
 
 
 def main() -> None:

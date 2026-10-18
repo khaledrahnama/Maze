@@ -110,8 +110,6 @@ class MazeGenerator:
                 if 0 <= x + dx < self.width and 0 <= y + dy < self.height
                 and (x + dx, y + dy) not in self.blocked]
 
-    
-
     def _place_42(self) -> None:
         """Place a centred 42 motif while preserving connectivity."""
         pattern = [
@@ -275,18 +273,42 @@ class MazeGenerator:
     def generate(self) -> list[list[int]]:
         """Build a new maze and return its structure.
 
-        Places the motif, carves a spanning tree with a randomised
-        depth-first search (an explicit stack, so large mazes cannot hit the
-        recursion limit), and braids the result when ``perfect`` is False.
+        Places the motif, carves a spanning tree (see :meth:`_carve`) and,
+        when ``perfect`` is False, braids the result into a playable board.
+        If the motif leaves too little room to braid, it is dropped and the
+        maze is carved again, as the subject allows for small mazes.
 
         Returns:
             The grid: one list per row, one integer of wall bits per cell.
 
         Raises:
-            ValueError: If a playable board cannot be braided at this size.
+            ValueError: If even without the motif no playable board fits.
+        """
+        self._place_42()
+        self._carve()
+        if not self.perfect:
+            try:
+                self._braid()
+            except ValueError:
+                if not self.blocked:
+                    raise
+                # The motif leaves too little room for a playable board at
+                # this size: the subject allows dropping it, with a message.
+                self.blocked = set()
+                self.motif_message = (
+                    "42 omitted: no room left for a playable board.")
+                self._carve()
+                self._braid()
+        return self.grid
+
+    def _carve(self) -> None:
+        """Carve a spanning tree with a randomised depth-first search.
+
+        Starts from the entry and uses an explicit stack, so even large
+        mazes cannot reach Python's recursion limit. Cells of the motif are
+        never entered, so their four walls stay closed.
         """
         self.grid = [[15] * self.width for _ in range(self.height)]
-        self._place_42()
         visited, stack = {self.entry}, [self.entry]
         while stack:
             cell = stack[-1]
@@ -301,9 +323,6 @@ class MazeGenerator:
             next_cell = (chosen[0], chosen[1])
             visited.add(next_cell)
             stack.append(next_cell)
-        if not self.perfect:
-            self._braid()
-        return self.grid
 
     def solve(self) -> str:
         """Find the shortest way out.
