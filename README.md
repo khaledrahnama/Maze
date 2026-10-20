@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by REPLACE_WITH_YOUR_42_LOGIN.*
+*This project has been created as part of the 42 curriculum by krahnama and sturuvek.*
 
 # A-Maze-ing
 
@@ -10,7 +10,7 @@ subject's hexadecimal format and shows them in the terminal.
 Two modes are available. With `PERFECT=True` the maze is *perfect*: exactly
 one path exists between any two cells. With `PERFECT=False` the result is a
 board for a Pac-Man-like game: fully connected, with open corners and centre,
-at least two independent routes and almost no dead ends. In both modes the
+at least two independent routes and no real dead end (bonus, see below). In both modes the
 maze contains a "42" drawn by fully closed cells, the outer border is closed,
 neighbouring cells always agree about the wall between them, and no 3x3 area
 is completely open.
@@ -20,6 +20,19 @@ and runs the program, `display.py` draws the maze in the terminal with
 box-drawing characters and handles the controls, and `mazegen.py` holds all
 the generation logic. Only `mazegen.py` is packaged, so a later project can
 install it with pip and build mazes without the interface.
+
+## Team and project management
+
+### Roles
+
+- **krahnama**: ROLE .
+- **sturuvek**: ROLE .
+
+### Tools
+
+flake8 and mypy for the standards, `make lint` before every commit, git and
+GitHub pull requests to merge each other's work, and repeated runs with
+different seeds and sizes to catch cases that one lucky seed hides.
 
 ## Instructions
 
@@ -45,7 +58,7 @@ controls:
 | `R` | Regenerate a new maze and rewrite the output file |
 | `P` | Show or hide the shortest path |
 | `C` | Change the wall colour (six choices) |
-| `M` | Change the colour of the "42" |
+| `M` | Change the colour of the "42" (six choices) |
 | `Q` | Quit |
 
 The maze is drawn with box-drawing characters: `S` is the entry, `E` the
@@ -55,18 +68,31 @@ an unknown key just asks again.
 
 Every error prints one `Error: ...` line and exits with the status 1: missing
 or unreadable configuration file, a line that is not `KEY=VALUE`, a repeated
-or missing key, a value that is not a number, coordinates outside the maze,
-an entry equal to the exit, or an output file that cannot be written.
+or missing key, a value that is not a number, a size outside 2 to 500,
+coordinates outside the maze, an entry equal to the exit, or an output file
+that cannot be written.
+
+### Bonus: perfectly braided board
+
+With `PERFECT=False` every dead end is braided away, so the board has no
+real dead end at all; the only cells with a single opening are the two
+notches enclosed by the "42" itself, which can never be opened. Check it with
+the provided script:
+
+```sh
+python3 maze_analyzer.py maze.txt --max-dead-ends 0
+# Verdict: Pac-Man-USABLE: ... no real dead-end -> bonus-grade (perfectly braided).
+```
 
 ## Configuration file format
 
 One `KEY=VALUE` pair per line. Everything after `#` is a comment, and blank
-lines are ignored. Keys are case-sensitive and must not be repeated.
+lines are ignored. Keys are case-insensitive (`width=20` works too) and must not be repeated.
 
 | Key | Meaning | Example | Mandatory |
 | --- | --- | --- | --- |
-| `WIDTH` | Number of columns, at least 2 | `WIDTH=20` | yes |
-| `HEIGHT` | Number of rows, at least 2 | `HEIGHT=20` | yes |
+| `WIDTH` | Number of columns, from 2 to 500 | `WIDTH=20` | yes |
+| `HEIGHT` | Number of rows, from 2 to 500 | `HEIGHT=20` | yes |
 | `ENTRY` | Entry cell `x,y`, inside the maze | `ENTRY=0,0` | yes |
 | `EXIT` | Exit cell `x,y`, different from the entry | `EXIT=19,19` | yes |
 | `OUTPUT_FILE` | File to write the maze into | `OUTPUT_FILE=maze.txt` | yes |
@@ -186,14 +212,3 @@ count independent loops, and to review error handling, docstrings and the
 packaging files. Every suggestion was re-implemented, tested with several
 seeds and sizes, and checked with flake8 and mypy; the design decisions and
 the final code are my own, and I can explain each part of them.
-
-## Project management
-
-Solo project. Planned in five stages, each committed separately:
-configuration and error handling, generation and the output file, the
-playable board, the terminal display and menu, then packaging and
-documentation. The braiding stage took the longest, because removing dead
-ends can create 3x3 open areas, which required undoing a change and trying
-another wall. Tools used: flake8 and mypy for the standards, `make lint`
-before every commit, and repeated runs with different seeds and sizes to
-catch cases that one lucky seed hides.

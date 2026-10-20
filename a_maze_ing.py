@@ -13,6 +13,10 @@ from display import MazeDisplay
 from mazegen import MazeGenerator
 
 
+MAX_SIZE = 500
+"""Largest WIDTH or HEIGHT accepted, so a typo cannot freeze the program."""
+
+
 class ConfigError(ValueError):
     """Configuration cannot describe a valid maze."""
 
@@ -40,20 +44,47 @@ class Settings:
     seed: int | None = None
 
 
-def coordinate(value: str) -> tuple[int, int]:
+def integer(key: str, value: str) -> int:
+    """Parse the integer value of a configuration key.
+
+    Args:
+        key: Name of the key, used in the error message.
+        value: The text to read, for example "20".
+
+    Returns:
+        The value as an int.
+
+    Raises:
+        ConfigError: If the text is not an integer.
+    """
+    try:
+        return int(value)
+    except ValueError:
+        raise ConfigError(
+            f"{key} must be an integer, got '{value}'") from None
+
+
+def coordinate(key: str, value: str) -> tuple[int, int]:
     """Parse an "x,y" pair.
 
     Args:
+        key: Name of the key, used in the error message.
         value: The text to read, for example "19,14".
 
     Returns:
         The pair as (x, y).
 
     Raises:
-        ValueError: If the text is not exactly two integers.
+        ConfigError: If the text is not exactly two integers.
     """
-    x, y = value.split(",")
-    return int(x), int(y)
+    parts = value.split(",")
+    try:
+        if len(parts) != 2:
+            raise ValueError
+        return int(parts[0]), int(parts[1])
+    except ValueError:
+        raise ConfigError(
+            f"{key} must be two integers 'x,y', got '{value}'") from None
 
 
 def load(path: str) -> Settings:
@@ -81,22 +112,22 @@ def load(path: str) -> Settings:
             if "=" not in line:
                 raise ConfigError(f"line {number}: expected KEY=VALUE")
             key, value = (part.strip() for part in line.split("=", 1))
+            key = key.upper()  # keys are case-insensitive: width=20 is OK
             if not key or key in values:
                 raise ConfigError(f"line {number}: empty or repeated key")
             values[key] = value
     for key in ("WIDTH", "HEIGHT", "ENTRY", "EXIT", "OUTPUT_FILE", "PERFECT"):
         if key not in values:
             raise ConfigError(f"missing {key}")
-    try:
-        width, height = int(values["WIDTH"]), int(values["HEIGHT"])
-        entry, exit_pos = coordinate(
-            values["ENTRY"]), coordinate(
-            values["EXIT"])
-        seed = int(values["SEED"]) if "SEED" in values else None
-    except ValueError as error:
-        raise ConfigError(f"invalid number or coordinate: {error}") from error
+    width = integer("WIDTH", values["WIDTH"])
+    height = integer("HEIGHT", values["HEIGHT"])
+    entry = coordinate("ENTRY", values["ENTRY"])
+    exit_pos = coordinate("EXIT", values["EXIT"])
+    seed = integer("SEED", values["SEED"]) if "SEED" in values else None
     if width < 2 or height < 2:
         raise ConfigError("WIDTH and HEIGHT must each be at least 2")
+    if width > MAX_SIZE or height > MAX_SIZE:
+        raise ConfigError(f"WIDTH and HEIGHT must each be at most {MAX_SIZE}")
     for x, y in (entry, exit_pos):
         if not (0 <= x < width and 0 <= y < height):
             raise ConfigError("ENTRY and EXIT must be inside the maze")

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,8 +8,13 @@ version = "1.0.0"
 description = "Reusable seeded maze generator with perfect and playable modes"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "LICENSE.md" }
+license = "MIT"
+license-files = ["LICENSE.md"]
 keywords = ["maze", "generator", "spanning-tree", "pathfinding"]
 
 [tool.setuptools]
 py-modules = ["mazegen"]
+
+[tool.mypy]
+# Keep `mypy .` on the project's own code: skip virtualenvs and build output.
+exclude = ['^(\.venv|venv|env|build|dist)/']

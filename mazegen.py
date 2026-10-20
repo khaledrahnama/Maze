@@ -141,21 +141,18 @@ class MazeGenerator:
         center_x = (self.width - pw) // 2
         center_y = (self.height - ph) // 2
 
-        # Try the centre first, then progressively nearby positions.
-        positions = [
-            (center_x + dx, center_y + dy)
-            for distance in range(max(self.width, self.height))
-            for dy in range(-distance, distance + 1)
-            for dx in range(-distance, distance + 1)
-            if max(abs(dx), abs(dy)) == distance
-        ]
+        # Every position where the motif fits inside the maze, tried from
+        # the centre outwards in square rings (top row of a ring first).
+        positions = sorted(
+            ((ox, oy)
+             for oy in range(self.height - ph + 1)
+             for ox in range(self.width - pw + 1)),
+            key=lambda pos: (max(abs(pos[0] - center_x),
+                                 abs(pos[1] - center_y)),
+                             pos[1], pos[0]),
+        )
 
         for ox, oy in positions:
-            if ox < 0 or oy < 0:
-                continue
-            if ox + pw > self.width or oy + ph > self.height:
-                continue
-
             cells = {
                 (ox + x, oy + y)
                 for y, row in enumerate(pattern)
@@ -200,15 +197,31 @@ class MazeGenerator:
         self.grid[y][x] &= ~bit
         self.grid[ny][nx] &= ~opposite
 
-    def _open_square(self) -> bool:
+    def _open_square(self, cell: tuple[int, int] | None = None) -> bool:
         """Tell whether a forbidden open area exists.
+
+        Opening one wall can only create a 3 by 3 open area that contains
+        the cell next to that wall, so when ``cell`` is given only the (at
+        most nine) blocks around it are checked instead of the whole grid.
+        This keeps braiding fast on large mazes.
+
+        Args:
+            cell: The cell (x, y) whose wall was just opened, or None to
+                scan the whole maze.
 
         Returns:
             True if some 3 by 3 block of cells has every inner wall open,
             which the subject forbids (2 by 3 is still allowed).
         """
-        for y in range(self.height - 2):
-            for x in range(self.width - 2):
+        if cell is None:
+            rows = range(self.height - 2)
+            cols = range(self.width - 2)
+        else:
+            cx, cy = cell
+            rows = range(max(0, cy - 2), min(cy, self.height - 3) + 1)
+            cols = range(max(0, cx - 2), min(cx, self.width - 3) + 1)
+        for y in rows:
+            for x in cols:
                 horizontal = all(not self.grid[yy][xx] & 2
                                  for yy in range(y, y + 3)
                                  for xx in range(x, x + 2))
@@ -244,7 +257,7 @@ class MazeGenerator:
                 if not self.grid[y][x] & bit:
                     continue
                 self._open(cell, neighbor)
-                if not self._open_square():
+                if not self._open_square(cell):
                     break
                 self.grid[y][x] |= bit
                 self.grid[ny][nx] |= opposite
@@ -259,7 +272,7 @@ class MazeGenerator:
                 nx, ny, bit, opposite, _ = neighbor
                 if self.grid[y][x] & bit:
                     self._open(cell, neighbor)
-                    if self._open_square():
+                    if self._open_square(cell):
                         self.grid[y][x] |= bit
                         self.grid[ny][nx] |= opposite
                     else:
