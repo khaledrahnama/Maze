@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by krahnama and sturuvek.*
+*This project has been created as part of the 42 curriculum by krahnama, sturuvek.*
 
 # A-Maze-ing
 
@@ -21,33 +21,30 @@ box-drawing characters and handles the controls, and `mazegen.py` holds all
 the generation logic. Only `mazegen.py` is packaged, so a later project can
 install it with pip and build mazes without the interface.
 
-## Team and project management
-
-### Roles
-
-- **krahnama**: ROLE .
-- **sturuvek**: ROLE .
-
-### Tools
-
-flake8 and mypy for the standards, `make lint` before every commit, git and
-GitHub pull requests to merge each other's work, and repeated runs with
-different seeds and sizes to catch cases that one lucky seed hides.
-
 ## Instructions
 
 Requirements: Python 3.10 or later; no third-party package is needed to run
-the program.
+the program. The development tools (flake8, mypy, build) are installed in a
+virtualenv, `.venv`, created by `make install`.
 
 ```sh
+make install             # create .venv and install flake8, mypy and build
 make run                 # python3 a_maze_ing.py config.txt
 make run CONFIG=my.txt   # another configuration file
+make debug               # run under pdb
 make lint                # flake8 and mypy with the required flags
 make lint-strict         # flake8 and mypy --strict
-make debug               # run under pdb
-make clean               # remove caches and generated mazes
-make build               # build mazegen-1.0.0-py3-none-any.whl and .tar.gz
+make build               # rebuild mazegen-1.0.0-py3-none-any.whl and .tar.gz
+make clean               # remove caches and the generated maze
+make fclean              # clean, plus remove .venv and the build output
+make re                  # fclean, install, then run
 ```
+
+`make run` and `make debug` use the virtualenv's Python when it exists and
+the system `python3` otherwise, so the program also runs without
+`make install` (and without internet access). `lint`, `lint-strict` and
+`build` run `make install` first if needed. `fclean` keeps the packaged
+`mazegen-1.0.0-*` files at the root, since they are part of the submission.
 
 While the program runs it shows a header with the mode, the entry and exit,
 the current colours and whether the "42" was drawn, then the maze, then the
@@ -176,6 +173,20 @@ print(maze.render(show_path=True))             # an ASCII picture
 maze.write("maze.txt")                         # the subject's file format
 ```
 
+`a_maze_ing.py` also runs with only the installed package and no
+`display.py`: it then falls back to a simpler interactive view drawn with
+`MazeGenerator.render()`, with the same controls (R, P, C, M, Q).
+
+```sh
+python3 -m venv /tmp/venv && /tmp/venv/bin/pip install mazegen-1.0.0-py3-none-any.whl
+mkdir /tmp/run && cp a_maze_ing.py config.txt /tmp/run && cd /tmp/run
+/tmp/venv/bin/python a_maze_ing.py config.txt
+```
+
+The full documentation of the module, with more examples, is in
+[`README_mazegen.md`](README_mazegen.md); it is also the description
+packaged inside the `.whl` and `.tar.gz`.
+
 Accessing the structure: `maze.grid` is a list of rows, one integer per cell
 whose bits say which walls are closed (1 north, 2 east, 4 south, 8 west);
 `maze.blocked` holds the cells of the "42"; `maze.solve()` returns a shortest
@@ -212,3 +223,38 @@ count independent loops, and to review error handling, docstrings and the
 packaging files. Every suggestion was re-implemented, tested with several
 seeds and sizes, and checked with flake8 and mypy; the design decisions and
 the final code are my own, and I can explain each part of them.
+
+## Team and project management
+
+### Roles
+
+- **krahnama**: ROLE Maze Generation and algorithm for the shortest path.
+- **sturuvek**: ROLE Terminal Display and Readme.
+
+### Planning and how it evolved
+
+Planned in five stages, each committed separately: configuration and error
+handling, generation and the output file, the playable board, the terminal
+display and menu, then packaging and documentation. The braiding stage and 
+display longer than planned, because removing dead ends can create 3x3 open 
+areas, which required undoing a change and trying another wall.
+
+### What worked well and what could be improved
+
+Worked well: keeping all the generation logic in one standalone module made
+it easy to test with many seeds and sizes and to package on its own; opening
+walls in a single method (`_open`) kept neighbouring cells coherent by
+construction.
+
+Could be improved: the first version of the 3x3 check scanned the whole grid
+after every opened wall, which made large playable mazes very slow; it now
+checks only the blocks around the opened wall. The "42" is skipped for some
+narrow mazes (for example 7 rows in playable mode) where a smarter placement
+could still fit it. Automated tests (pytest) would catch regressions sooner
+than manual runs.
+
+### Tools
+
+flake8 and mypy for the standards, `make lint` before every commit, git and
+GitHub pull requests to merge each other's work, and repeated runs with
+different seeds and sizes to catch cases that one lucky seed hides.

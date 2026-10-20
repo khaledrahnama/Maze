@@ -2,16 +2,26 @@
 
 Reads a KEY=VALUE configuration file, asks :mod:`mazegen` for a maze, writes
 the output file and hands it to :mod:`display` for the interactive terminal
-view. All foreseeable problems end as one "Error: ..." line and exit code 1.
+view. When ``display.py`` is not available (for example when only the
+installed ``mazegen`` package and this file are used), a simpler interactive
+view built on :meth:`MazeGenerator.render` is used instead. All foreseeable
+problems end as one "Error: ..." line and exit code 1.
 
 Usage:
     python3 a_maze_ing.py config.txt
 """
 from dataclasses import dataclass
 import sys
-from display import MazeDisplay
 from mazegen import MazeGenerator
 
+
+# Wall colours offered by the simple view (C cycles through them).
+SIMPLE_COLORS = [("Cyan", "\033[36m"), ("Green", "\033[32m"),
+                 ("Yellow", "\033[33m"), ("Magenta", "\033[35m"),
+                 ("White", "\033[37m")]
+# Colours of the "42" in the simple view (M cycles through them).
+SIMPLE_MOTIF_COLORS = [("Yellow", "\033[1;33m"), ("Red", "\033[1;31m"),
+                       ("Green", "\033[1;32m"), ("Blue", "\033[1;34m")]
 
 MAX_SIZE = 500
 """Largest WIDTH or HEIGHT accepted, so a typo cannot freeze the program."""
@@ -141,6 +151,68 @@ def load(path: str) -> Settings:
                     values["PERFECT"].lower() == "true", seed)
 
 
+def simple_view(maze: MazeGenerator, output_file: str) -> None:
+    """Interactive view that needs nothing but :mod:`mazegen`.
+
+    Used when ``display.py`` is missing. It draws the maze with
+    :meth:`MazeGenerator.render` and offers the same mandatory controls:
+    regenerate, show/hide the path, change the wall and "42" colours.
+
+    Args:
+        maze: A generator on which ``generate()`` has already been called.
+        output_file: File rewritten every time the maze is regenerated.
+    """
+    show_path, wall, motif = True, 0, 0
+    while True:
+        print("\033[2J\033[H", end="")
+        print("A-MAZE-ING (simple view)")
+        print(f"PATH: {'ON' if show_path else 'OFF'}   "
+              f"WALLS: {SIMPLE_COLORS[wall][0]}   "
+              f"42: {SIMPLE_MOTIF_COLORS[motif][0]}")
+        if maze.motif_message:
+            print(f"NOTE: {maze.motif_message}")
+        print(maze.render(show_path, SIMPLE_COLORS[wall][1],
+                          SIMPLE_MOTIF_COLORS[motif][1]))
+        print("E = entry, X = exit, # = 42, . = shortest path")
+        print("[R] regenerate  [P] path  [C] wall colour  [M] 42 colour  "
+              "[Q] quit")
+        choice = input("Choose an option: ").strip().lower()
+        if choice == "r":
+            try:
+                maze.generate()
+                maze.write(output_file)
+            except (ValueError, OSError) as error:
+                input(f"Could not regenerate maze: {error} (press Enter)")
+        elif choice == "p":
+            show_path = not show_path
+        elif choice == "c":
+            wall = (wall + 1) % len(SIMPLE_COLORS)
+        elif choice == "m":
+            motif = (motif + 1) % len(SIMPLE_MOTIF_COLORS)
+        elif choice == "q":
+            print("Goodbye.")
+            return
+        else:
+            input("Invalid option. Choose R, P, C, M, or Q (press Enter)")
+
+
+def show(maze: MazeGenerator, output_file: str) -> None:
+    """Open the full display, or the simple view if display.py is missing.
+
+    Args:
+        maze: A generator on which ``generate()`` has already been called.
+        output_file: File rewritten every time the maze is regenerated.
+    """
+    try:
+        from display import MazeDisplay
+    except ModuleNotFoundError as error:
+        if error.name != "display":
+            raise  # a different module is missing: a real problem
+        simple_view(maze, output_file)
+        return
+    MazeDisplay(maze, output_file).run()
+
+
 def main() -> None:
     """Load the configuration and launch the maze interface."""
     try:
@@ -162,8 +234,7 @@ def main() -> None:
         maze.generate()
         maze.write(settings.output_file)
 
-        display = MazeDisplay(maze, settings.output_file)
-        display.run()
+        show(maze, settings.output_file)
 
     except (EOFError, KeyboardInterrupt):
         print("\nGoodbye.")
